@@ -81,7 +81,7 @@
 
     .stats {
       display: flex;
-      gap: 12px;
+      gap: 10px;
       align-items: center;
       flex-wrap: wrap;
       justify-content: flex-end;
@@ -121,6 +121,7 @@
     }
 
     .btn:active { filter: brightness(0.88); }
+    .btn[disabled] { opacity: 0.45; pointer-events: none; }
 
     #game {
       flex: 1;
@@ -155,11 +156,12 @@
       border: 1.5px dashed rgba(201,168,76,0.32);
       background: rgba(0,0,0,0.13);
       position: relative;
-      transition: border-color 0.1s, background 0.1s;
+      transition: border-color 0.1s, background 0.1s, box-shadow 0.1s;
     }
 
     .pile-placeholder.drag-over,
-    .pile-placeholder.tap-target {
+    .pile-placeholder.tap-target,
+    .card.tap-target {
       border-color: var(--gold);
       background: rgba(201,168,76,0.16);
       box-shadow: 0 0 0 2px rgba(201,168,76,0.18) inset;
@@ -348,9 +350,10 @@
   <header>
     <div class="logo"><em>♠</em> Solitaire</div>
     <div class="stats">
-      <div class="stat"><span class="stat-val" id="score-val">0</span>Score</div>
+      <div class="stat"><span class="stat-val" id="score-val">-52</span>Vegas</div>
       <div class="stat"><span class="stat-val" id="moves-val">0</span>Moves</div>
       <div class="stat"><span class="stat-val" id="time-val">0:00</span>Time</div>
+      <button class="btn" id="undo-btn" onclick="undoMove()">Undo</button>
       <button class="btn" onclick="newGame()">New</button>
     </div>
   </header>
@@ -403,8 +406,12 @@
     const SUITS = ["♠", "♥", "♦", "♣"];
     const RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
     const RED = new Set(["♥", "♦"]);
-    const STORAGE_KEY = "offline-solitaire-draw3-v1";
+
+    const STORAGE_KEY = "offline-solitaire-vegas-undo-v1";
     const DRAW_COUNT = 3;
+    const START_SCORE = -52;
+    const FOUNDATION_REWARD = 5;
+    const MAX_HISTORY = 100;
 
     const rankVal = (r) => RANKS.indexOf(r);
     const isRed = (s) => RED.has(s);
@@ -417,7 +424,7 @@
     let foundations = [[], [], [], []];
     let tableau = [[], [], [], [], [], [], []];
 
-    let score = 0;
+    let score = START_SCORE;
     let moves = 0;
     let startTime = null;
     let timerInterval = null;
@@ -429,6 +436,7 @@
     let toastT = null;
 
     let selectedMove = null;
+    let history = [];
 
     function calcSize() {
       const vw = window.innerWidth;
@@ -458,6 +466,55 @@
       return a;
     }
 
+    function cloneState() {
+      return JSON.parse(JSON.stringify({
+        stock,
+        waste,
+        foundations,
+        tableau,
+        score,
+        moves,
+        elapsed: startTime ? Math.floor((Date.now() - startTime) / 1000) : 0
+      }));
+    }
+
+    function restoreFromSnapshot(snap) {
+      stock = snap.stock || [];
+      waste = snap.waste || [];
+      foundations = snap.foundations || [[], [], [], []];
+      tableau = snap.tableau || [[], [], [], [], [], [], []];
+      score = typeof snap.score === "number" ? snap.score : START_SCORE;
+      moves = snap.moves || 0;
+
+      clearInterval(timerInterval);
+      startTime = Date.now() - ((snap.elapsed || 0) * 1000);
+      timerInterval = setInterval(updateTimer, 1000);
+
+      clearSelectedMove(false);
+      render();
+      updateTimer();
+    }
+
+    function pushHistory() {
+      history.push(cloneState());
+      if (history.length > MAX_HISTORY) history.shift();
+      updateUndoButton();
+      saveState();
+    }
+
+    function updateUndoButton() {
+      const btn = document.getElementById("undo-btn");
+      if (btn) btn.disabled = history.length === 0;
+    }
+
+    function undoMove() {
+      if (!history.length) return;
+      const snap = history.pop();
+      restoreFromSnapshot(snap);
+      updateUndoButton();
+      saveState();
+    }
+
     function saveState() {
       const elapsed = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
@@ -467,7 +524,8 @@
         tableau,
         score,
         moves,
-        elapsed
+        elapsed,
+        history
       }));
     }
 
@@ -483,8 +541,9 @@
         waste = state.waste || [];
         foundations = state.foundations || [[], [], [], []];
         tableau = state.tableau || [[], [], [], [], [], [], []];
-        score = state.score || 0;
+        score = typeof state.score === "number" ? state.score : START_SCORE;
         moves = state.moves || 0;
+        history = Array.isArray(state.history) ? state.history : [];
 
         clearInterval(timerInterval);
         startTime = Date.now() - ((state.elapsed || 0) * 1000);
@@ -494,6 +553,7 @@
         document.getElementById("win-screen").classList.remove("show");
         render();
         updateTimer();
+        updateUndoButton();
         return true;
       } catch {
         return false;
@@ -506,8 +566,9 @@
       foundations = [[], [], [], []];
       waste = [];
       stock = [];
-      score = 0;
+      score = START_SCORE;
       moves = 0;
+      history = [];
       clearSelectedMove(false);
 
       let idx = 0;
@@ -528,6 +589,7 @@
       document.getElementById("win-screen").classList.remove("show");
       render();
       updateTimer();
+      updateUndoButton();
       saveState();
     }
 
@@ -565,6 +627,7 @@
       renderTableau();
       document.getElementById("score-val").textContent = score;
       document.getElementById("moves-val").textContent = moves;
+      updateUndoButton();
       saveState();
     }
 
@@ -596,9 +659,16 @@
 
         const el = makeCard(card, i + 1, 0);
         el.style.left = ((i * 10) - startLeft) + "px";
+        el.dataset.wasteIndex = absoluteIndex;
+        el.dataset.wasteDrop = "1";
 
         if (isTopPlayable) {
           bindCardInteraction(el, "waste", null, absoluteIndex, true);
+          if (selectedMove &&
+              selectedMove.source === "waste" &&
+              selectedMove.idx === absoluteIndex) {
+            el.classList.add("selected");
+          }
         }
 
         pile.appendChild(el);
@@ -611,6 +681,7 @@
         pile.querySelectorAll(".card").forEach((e) => e.remove());
 
         const ph = pile.querySelector(".pile-placeholder");
+        ph.dataset.found = f;
         ph.onclick = () => handleTapDestination({ type: "foundation", index: f });
         ph.ontouchend = (e) => {
           e.preventDefault();
@@ -621,6 +692,12 @@
 
         const el = makeCard(foundations[f][foundations[f].length - 1], 1, 0);
         el.style.position = "absolute";
+        el.dataset.found = f;
+        el.onclick = () => handleTapDestination({ type: "foundation", index: f });
+        el.ontouchend = (e) => {
+          e.preventDefault();
+          handleTapDestination({ type: "foundation", index: f });
+        };
         pile.appendChild(el);
       }
     }
@@ -649,6 +726,8 @@
 
         cards.forEach((card, i) => {
           const el = makeCard(card, i + 1, top);
+          el.dataset.tabDrop = c;
+          el.dataset.tabIndex = i;
 
           if (card.faceUp) {
             bindCardInteraction(el, "tableau", c, i, i === cards.length - 1);
@@ -677,12 +756,6 @@
         });
 
         col.style.height = Math.max(totalH, CARD_H) + "px";
-      }
-
-      if (selectedMove && selectedMove.source === "waste") {
-        const pile = document.getElementById("waste-pile");
-        const cards = pile.querySelectorAll(".card");
-        if (cards.length) cards[cards.length - 1].classList.add("selected");
       }
 
       paintTapTargets();
@@ -828,16 +901,27 @@
       ghost.style.display = "none";
       const els = document.elementsFromPoint(cx, cy);
       ghost.style.display = "block";
-      return els.find((el) => el.dataset.found !== undefined || el.dataset.tabDrop !== undefined);
+
+      return els.find((el) =>
+        el.dataset.found !== undefined ||
+        el.dataset.tabDrop !== undefined
+      );
     }
 
     function hilite(cx, cy) {
       clearHilite();
       if (!ghost) return;
+
       ghost.style.display = "none";
       const els = document.elementsFromPoint(cx, cy);
       ghost.style.display = "block";
-      const t = els.find((el) => el.classList && el.classList.contains("pile-placeholder"));
+
+      const t = els.find((el) =>
+        el.classList &&
+        (el.classList.contains("pile-placeholder") || el.classList.contains("card")) &&
+        (el.dataset.found !== undefined || el.dataset.tabDrop !== undefined)
+      );
+
       if (t) t.classList.add("drag-over");
     }
 
@@ -857,13 +941,15 @@
       clearSelectedMove(false);
 
       if (!stock.length) {
+        pushHistory();
         stock = [...waste].reverse().map(c => ({ ...c, faceUp: false }));
         waste = [];
-        score = Math.max(0, score - 100);
+        moves++;
         render();
         return;
       }
 
+      pushHistory();
       for (let i = 0; i < DRAW_COUNT && stock.length; i++) {
         const card = stock.pop();
         card.faceUp = true;
@@ -871,7 +957,6 @@
       }
 
       moves++;
-      score += 5;
       render();
     }
 
@@ -879,11 +964,12 @@
       clearSelectedMove(false);
       const col = tableau[c];
       if (!col.length) return;
+
       const top = col[col.length - 1];
       if (!top.faceUp) {
+        pushHistory();
         top.faceUp = true;
         moves++;
-        score += 10;
         render();
       }
     }
@@ -920,10 +1006,11 @@
         return false;
       }
 
+      pushHistory();
       removeSource();
       foundations[f].push(dragCards[0]);
       moves++;
-      score += 15;
+      score += FOUNDATION_REWARD;
       render();
       checkWin();
       return true;
@@ -936,10 +1023,10 @@
         return false;
       }
 
+      pushHistory();
       removeSource();
       tableau[c].push(...dragCards);
       moves++;
-      score += 5;
       render();
       return true;
     }
@@ -947,19 +1034,27 @@
     function handleCardTap(source, col, idx, allowAuto) {
       if (source === "waste" && idx !== waste.length - 1) return;
 
+      if (selectedMove) {
+        if (selectedMove.source === source &&
+            selectedMove.col === col &&
+            selectedMove.idx === idx) {
+          clearSelectedMove(true);
+          return;
+        }
+
+        if (source === "tableau" && selectedMove.col !== col) {
+          handleTapDestination({ type: "tableau", index: col });
+          return;
+        }
+
+        if (source === "waste") {
+          clearSelectedMove(true);
+          return;
+        }
+      }
+
       const cards = getCards(source, col, idx);
       if (!cards.length || !cards[0].faceUp) return;
-
-      const sameSelected =
-        selectedMove &&
-        selectedMove.source === source &&
-        selectedMove.col === col &&
-        selectedMove.idx === idx;
-
-      if (sameSelected) {
-        clearSelectedMove(true);
-        return;
-      }
 
       if (allowAuto && autoMoveFrom(source, col, idx)) {
         return;
@@ -1020,13 +1115,19 @@
       if (!selectedMove) return;
 
       const targets = getPlayableTargets(selectedMove);
+
       targets.foundations.forEach((f) => {
-        const el = document.querySelector(`#found-${f} .pile-placeholder`);
-        if (el) el.classList.add("tap-target");
+        const pile = document.querySelector(`#found-${f} .pile-placeholder`);
+        const card = document.querySelector(`#found-${f} .card`);
+        if (pile) pile.classList.add("tap-target");
+        if (card) card.classList.add("tap-target");
       });
+
       targets.tableaux.forEach((c) => {
-        const el = document.querySelector(`#tab-${c} .pile-placeholder`);
-        if (el) el.classList.add("tap-target");
+        const pile = document.querySelector(`#tab-${c} .pile-placeholder`);
+        const cards = document.querySelectorAll(`#tab-${c} .card`);
+        if (pile) pile.classList.add("tap-target");
+        if (cards.length) cards[cards.length - 1].classList.add("tap-target");
       });
     }
 
@@ -1068,9 +1169,8 @@
       const s = el % 60;
 
       document.getElementById("win-stats").textContent =
-        `Score: ${score} · Moves: ${moves} · Time: ${m}:${s.toString().padStart(2, "0")}`;
+        `Vegas Score: ${score} · Moves: ${moves} · Time: ${m}:${s.toString().padStart(2, "0")}`;
       document.getElementById("win-screen").classList.add("show");
-      localStorage.removeItem(STORAGE_KEY);
       launchConfetti();
     }
 
@@ -1157,6 +1257,7 @@
     } else {
       render();
       updateTimer();
+      updateUndoButton();
     }
   </script>
 </body>
