@@ -67,10 +67,10 @@
     }
 
     .logo {
-      font-size: 1.1rem;
+      font-size: 1.05rem;
       color: var(--gold);
       font-style: italic;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.05em;
       white-space: nowrap;
       font-weight: 700;
       flex: 0 0 auto;
@@ -94,18 +94,18 @@
     .stat {
       text-align: center;
       color: rgba(226,201,126,0.75);
-      font-size: 0.56rem;
-      letter-spacing: 0.08em;
+      font-size: 0.54rem;
+      letter-spacing: 0.07em;
       text-transform: uppercase;
       line-height: 1.1;
-      width: 48px;
-      min-width: 48px;
-      flex: 0 0 48px;
+      width: 46px;
+      min-width: 46px;
+      flex: 0 0 46px;
     }
 
     .stat-val {
       display: block;
-      font-size: 0.88rem;
+      font-size: 0.84rem;
       color: var(--gold-light);
       font-weight: 700;
       white-space: nowrap;
@@ -113,24 +113,32 @@
 
     #time-val {
       display: inline-block;
-      min-width: 38px;
+      min-width: 40px;
+    }
+
+    .btn-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 0 0 auto;
     }
 
     .btn {
       background: linear-gradient(135deg, var(--gold) 0%, #a07828 100%);
       color: #111;
       border: none;
-      padding: 6px 10px;
+      padding: 4px 8px;
       border-radius: 4px;
       font-family: Georgia, serif;
-      font-size: 0.76rem;
+      font-size: 0.68rem;
       font-weight: 700;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.03em;
       cursor: pointer;
       box-shadow: 0 2px 6px rgba(0,0,0,0.35);
       -webkit-tap-highlight-color: transparent;
       white-space: nowrap;
       flex: 0 0 auto;
+      min-width: 54px;
     }
 
     .btn:active { filter: brightness(0.88); }
@@ -354,7 +362,8 @@
       }
 
       .logo {
-        font-size: 0.96rem;
+        font-size: 0.92rem;
+        letter-spacing: 0.03em;
       }
 
       .stats {
@@ -362,23 +371,28 @@
       }
 
       .stat {
-        width: 44px;
-        min-width: 44px;
-        flex: 0 0 44px;
-        font-size: 0.52rem;
+        width: 42px;
+        min-width: 42px;
+        flex: 0 0 42px;
+        font-size: 0.5rem;
       }
 
       .stat-val {
-        font-size: 0.82rem;
+        font-size: 0.78rem;
       }
 
       #time-val {
-        min-width: 34px;
+        min-width: 36px;
+      }
+
+      .btn-stack {
+        gap: 3px;
       }
 
       .btn {
-        padding: 5px 8px;
-        font-size: 0.72rem;
+        min-width: 50px;
+        padding: 4px 6px;
+        font-size: 0.64rem;
       }
     }
   </style>
@@ -390,12 +404,16 @@
 
   <header>
     <div class="logo"><em>♠</em> Solitaire</div>
+
     <div class="stats">
       <div class="stat"><span class="stat-val" id="score-val">-52</span>Vegas</div>
       <div class="stat"><span class="stat-val" id="moves-val">0</span>Moves</div>
       <div class="stat"><span class="stat-val" id="time-val">00:00</span>Time</div>
-      <button class="btn" id="undo-btn" onclick="undoMove()">Undo</button>
-      <button class="btn" onclick="newGame()">New</button>
+
+      <div class="btn-stack">
+        <button class="btn" id="undo-btn" onclick="undoMove()">Undo</button>
+        <button class="btn" onclick="newGame()">New</button>
+      </div>
     </div>
   </header>
 
