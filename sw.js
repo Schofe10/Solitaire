@@ -1,4 +1,4 @@
-const CACHE_NAME = "solitaire-vegas-undo-v2";
+const CACHE_NAME = "solitaire-vegas-undo-v3";
 const FILES_TO_CACHE = [
   "./",
   "./index.html",
